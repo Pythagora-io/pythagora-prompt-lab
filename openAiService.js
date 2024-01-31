@@ -2,6 +2,7 @@ const axios = require('axios');
 
 const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const LLM_MODEL = process.env.LLM_MODEL;
 
 // Exponential backoff configuration
 const MAX_RETRIES = 5;
@@ -34,7 +35,7 @@ const callOpenAiApi = async (messages, io, requestId) => {
       const response = await axios.post(
         OPENAI_COMPLETIONS_ENDPOINT,
         {
-          model: 'gpt-3.5-turbo',
+          model: LLM_MODEL,
           messages: messagesPayload,
         },
         {
