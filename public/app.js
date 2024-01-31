@@ -1,0 +1,358 @@
+// Remove message item function moved to global scope
+function removeMessageItem(element) {
+  try {
+    const messageItem = element.closest('div');
+    messageItem.remove();
+    console.log('Message item removed successfully');
+  } catch (error) {
+    console.error('Failed to remove message item:', error.message, error.stack);
+  }
+}
+
+// Function to delete a response element
+// Modified deleteResponse function to include requestId in the API endpoint
+function deleteResponse(event, requestId, responseId) {
+  event.preventDefault();
+  // Updated endpoint to include both requestId and responseId
+  fetch(`/api/delete-response/${requestId}/${responseId}`, {
+    method: 'DELETE'
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    // Receive confirmation from server that deletion was successful
+    const responseElement = document.getElementById(`response-${requestId}`);
+    if (responseElement) {
+      // Remove the specified response element from the DOM
+      responseElement.remove();
+      console.log(`Response #${requestId} deleted successfully`);
+    } else {
+      // Log error if the response element could not be located
+      console.error(`Could not find response element #${requestId} in the DOM.`);
+    }
+  })
+  .catch(error => {
+    console.error('Failed to delete response:', error.message, error.stack);
+    alert(`Failed to delete response: ${error.message}`);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Add event listener for the SUBMIT button
+  const submitButton = document.getElementById('submitButton');
+  if (submitButton) {
+    submitButton.addEventListener('click', submitConversation);
+  } else {
+    console.error('Submit button not found');
+  }
+
+  // Function to add a new message item to the list
+  function addMessageItem(text = '', role = 'user') {
+    const messageListElement = document.getElementById('messageList');
+    const newMessageItem = document.createElement('div');
+    newMessageItem.classList.add('flex', 'items-center', 'mb-2', 'bg-white', 'border', 'p-2', 'rounded', 'shadow');
+    newMessageItem.innerHTML = `
+      <textarea class="flex-grow border p-2 mr-2 rounded" rows="2" placeholder="Enter a message...">${text}</textarea>
+      <select class="border p-2 rounded">
+        <option value="user" ${role === 'user' ? 'selected' : ''}>User</option>
+        <option value="assistant" ${role === 'assistant' ? 'selected' : ''}>Assistant</option>
+      </select>
+      <button class="ml-2 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" onclick="removeMessageItem(this)">X</button>
+    `;
+    messageListElement.appendChild(newMessageItem);
+    console.log('Added new message item to list');
+  }
+
+  // Event listener for the Add Message button
+  const addMessageButton = document.getElementById('addMessageButton');
+  if (addMessageButton) {
+    addMessageButton.addEventListener('click', () => {
+      try {
+        addMessageItem();
+        console.log('New message item added.');
+      } catch (error) {
+        console.error('Failed to add new message item:', error.message, error.stack);
+      }
+    });
+  } else {
+    console.error('Add Message button not found');
+  }
+
+  // Add initial message item on load
+  addMessageItem();
+
+  // Function to load messages from JSON
+  function loadMessagesFromJson() {
+    try {
+      const jsonTextarea = document.getElementById('jsonImportTextarea');
+      const messages = JSON.parse(jsonTextarea.value);
+      const messageList = document.getElementById('messageList');
+      messageList.innerHTML = ''; // Clear existing messages
+      
+      messages.forEach(message => {
+        addMessageItem(message.text, message.role); // Reuse function to add messages to the UI
+      });
+      console.log('Messages loaded from JSON.'); // Logging successful operation
+    } catch (error) {
+      // Proper error handling and logging with stack trace
+      console.error('Failed to load messages from JSON:', error.message, error.stack);
+      // Inform the user through the UI that there was an error
+      const jsonErrorElement = document.getElementById('jsonError');
+      if (jsonErrorElement) {
+        jsonErrorElement.textContent = error.message;
+        jsonErrorElement.classList.remove('hidden');
+      } else {
+        // If the error display element doesn't exist, log the error in the console
+        console.error('JSON error display element not found in the UI.');
+      }
+    }
+  }
+
+  // Event listener for the Load Messages button
+  const loadMessagesButton = document.getElementById('loadMessagesButton');
+  if (loadMessagesButton) {
+    loadMessagesButton.addEventListener('click', loadMessagesFromJson);
+    console.log('Event listener for Load Messages button added.'); // Logging successful operation
+  } else {
+    // Error handling with proper logging if the element is not found
+    console.error('Load Messages button not found');
+  }
+
+  // Function to handle OpenAI API errors
+  function handleOpenAiError(error) {
+    console.error('OpenAI Error:', error.message, error.stack);
+  }
+
+  // Function to display responses in real-time
+  function displayRealTimeResponse(data) {
+    const responseContainer = document.getElementById('responseContainer');
+    const { response, requestId } = data;
+    const responseId = response.id; // We're assuming each response has a unique 'id' property
+    const responseElement = document.createElement('details');
+    responseElement.id = `response-${requestId}`;
+    
+    const deleteButton = document.createElement('button');
+    deleteButton.classList.add('ml-2', 'bg-red-500', 'hover:bg-red-700', 'text-white', 'font-bold', 'py-2', 'px-4', 'rounded');
+    deleteButton.textContent = 'Delete';
+    // Updated endpoint to match the server route and added requestId
+    deleteButton.addEventListener('click', (event) => deleteResponse(event, requestId, responseId));
+    
+    responseElement.innerHTML = `
+      <summary>Response #${requestId}</summary>
+      <p>${response.choices[0].message.content}</p>
+    `;
+    responseElement.appendChild(deleteButton);
+    
+    responseContainer.appendChild(responseElement);
+    console.log(`Response #${requestId} displayed`);
+  }
+
+  // Function to collect messages and make a POST request on submit
+  async function submitConversation() {
+    try {
+      const messageElements = document.querySelectorAll('#messageList > div');
+      const messages = Array.from(messageElements).map(messageElement => {
+        const textArea = messageElement.querySelector('textarea');
+        const roleSelect = messageElement.querySelector('select');
+        return {
+          text: textArea.value,
+          role: roleSelect.value
+        };
+      });
+      const apiRequestsCount = parseInt(document.getElementById('apiRequestsCount').value, 10) || 0;
+      if (Number.isNaN(apiRequestsCount) || apiRequestsCount < 0 || apiRequestsCount > 100) {
+        throw new Error('The number of API requests must be between 0 and 100.');
+      }
+      if (socket === null) {
+        console.log('Establishing WebSocket connection.');
+        socket = io();
+        socket.on('openai_real_response', displayRealTimeResponse);
+        socket.on('openai_error', handleOpenAiError);
+      }
+      const response = await fetch('/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages, apiRequestsCount }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      console.log('Conversation submitted successfully.');
+    } catch (error) {
+      console.error('Failed to submit conversation:', error.message, error.stack);
+    }
+  }
+  
+  // Add event listener to the Save Conversation button
+  const saveConversationButton = document.getElementById('saveConversationButton');
+  if (saveConversationButton) {
+    saveConversationButton.addEventListener('click', saveConversation);
+  } else {
+    console.error('Save Conversation button not found');
+  }
+
+  // Function to initiate the process of saving the current conversation state
+  function saveConversation() {
+    try {
+      console.log('Initiating process to save the current conversation.');
+      // Collect message items
+      const messageItems = document.querySelectorAll('#messageList > div');
+      const messages = Array.from(messageItems).map(item => {
+        const textarea = item.querySelector('textarea');
+        const select = item.querySelector('select');
+        return {
+          text: textarea.value,
+          role: select.value
+        };
+      });
+      
+      // Collect OpenAI API responses from the UI
+      const responseElements = document.querySelectorAll('#responseContainer > details');
+      const responses = Array.from(responseElements).map(detail => {
+        const summary = detail.querySelector('summary');
+        const p = detail.querySelector('p');
+        return {
+          text: p ? p.textContent : '',
+          requestNumber: summary ? Number(summary.textContent.replace('Response #', '')) : null
+        };
+      });
+
+      const conversationName = `Conversation_${new Date().toISOString()}`;
+      const payload = {
+        name: conversationName,
+        messages: messages,
+        responses: responses 
+      };
+    
+      // Send the POST request to '/api/save-conversation'
+      fetch('/api/save-conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Conversation saved successfully:', data);
+        alert('Conversation saved successfully!');
+      })
+      .catch(error => {
+        console.error('Error saving conversation:', error.message, error.stack);
+        alert(`Error saving conversation: ${error.message}`);
+      });
+    } catch (error) {
+      console.error('Failed to execute saveConversation function:', error.message, error.stack);
+      alert(`Failed to save conversation: ${error.message}`);
+    }
+  }
+  
+  // Function to load and display a list of stored conversations
+  function loadConversationsList() {
+    console.log('Loading conversations list.');
+    fetch('/api/load-conversations', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(conversations => {
+      const conversationsListContainer = document.getElementById('conversationsListContainer') || createConversationsListContainer();
+      conversationsListContainer.innerHTML = ''; // Clear previous conversation list
+
+      conversations.forEach(conversation => {
+        const listItem = document.createElement('button');
+        listItem.textContent = conversation.name;
+        listItem.classList.add('block', 'text-left', 'p-2', 'hover:bg-gray-200', 'w-full', 'mt-1');
+        listItem.onclick = () => loadConversationDetails(conversation._id);
+        conversationsListContainer.appendChild(listItem);
+      });
+      console.log('Conversations list loaded.');
+    })
+    .catch(error => {
+      console.error('Failed to load conversations list:', error.message, error.stack);
+    });
+  }
+
+  // Add event listener to Load Conversation button
+  const loadConversationButton = document.getElementById('loadConversationButton');
+  if (loadConversationButton) {
+    loadConversationButton.addEventListener('click', loadConversationsList);
+  } else {
+    console.error('Load Conversation button not found');
+  }
+
+  // Function to load and display a specific conversation's details
+  function loadConversationDetails(conversationId) {
+    console.log('Loading conversation details for ID:', conversationId);
+    fetch(`/api/load-conversations/${conversationId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(response => {
+      if (!response.ok) {
+        console.error(`HTTP error! Status: ${response.status}`);
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(conversation => {
+      // Clear existing messages and responses from the UI
+      document.getElementById('messageList').innerHTML = '';
+      document.getElementById('responseContainer').innerHTML = '';
+  
+      // Recreate message list items based on the loaded conversation
+      conversation.messages.forEach((message) => {
+        addMessageItem(message.text, message.role);
+      });
+  
+      // Check if the responses object exists before trying to iterate over it
+      if (conversation.responses && Array.isArray(conversation.responses)) {
+        // Recreate OpenAI API responses in the UI
+        conversation.responses.forEach((response, index) => {
+          const responseElement = document.createElement('details');
+          responseElement.innerHTML = `
+            <summary>Response #${index + 1}</summary>
+            <p>${response.text}</p>
+          `;
+          document.getElementById('responseContainer').appendChild(responseElement);
+        });
+      } else {
+        console.error('No responses found for this conversation.');
+      }
+  
+      console.log('Conversation details loaded and displayed.');
+    })
+    .catch(error => {
+      console.error('Failed to load conversation details:', error.message, error.stack);
+      alert(`Failed to load conversation details: ${error.message}`);
+    });
+  }
+
+  // Optional helper function to create the conversations list container if it doesn't exist
+  function createConversationsListContainer() {
+    const appElement = document.getElementById('app');
+    const newListContainer = document.createElement('div');
+    newListContainer.id = 'conversationsListContainer';
+    appElement.insertBefore(newListContainer, appElement.firstChild); // insert before the first child
+    return newListContainer;
+  }
+
+  let socket = null;
+});

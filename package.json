@@ -1,0 +1,30 @@
+{
+  "name": "prompt_engineering",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "jest",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.6",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "mongoose": "^8.1.1",
+    "socket.io": "^4.7.4"
+  },
+  "description": "",
+  "devDependencies": {
+    "@jest/types": "^26.6.2",
+    "axios-mock-adapter": "^1.22.0",
+    "jest": "^26.6.0",
+    "jest-circus": "^26.6.0",
+    "socket.io-client": "^4.7.4"
+  }
+}
