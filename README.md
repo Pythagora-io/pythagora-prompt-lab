@@ -29,6 +29,7 @@ Create a `.env` file in the root directory with the following format:
 ```
 OPENAI_API_KEY=your-actual-openai-api-key
 MONGODB_URI=mongodb://localhost:27017/prompt_engineering
+LLM_MODEL=gpt-4-turbo-preview
 ```
 
 Replace `your-actual-openai-api-key` with your OpenAI API key. Ensure that MongoDB is running and accessible at the URI provided.
