@@ -11,20 +11,35 @@ const BACKOFF_MULTIPLIER = 2;
 
 // Utility function to format messages for OpenAI API
 const formatMessagesForOpenAi = (messages) => {
-  return messages.map(message => ({
-    role: message.role === 'assistant' ? 'system' : 'user',
-    content: message.text.trim(),
-  }));
+  // Enhanced function to handle 'system' messages correctly
+  return messages.map(message => {
+    switch (message.role) {
+      case 'system':
+        console.log('Processing system message:', message.text); // gpt_pilot_debugging_log
+        // Though OpenAI's API may not directly use 'system' roles, this prepares them for potential logging or debugging
+        return { role: 'system', content: message.text.trim() }; 
+      case 'assistant':
+        console.log('Formatting message as assistant role:', message.text); // gpt_pilot_debugging_log
+        return { role: 'system', content: message.text.trim() }; // Treating 'assistant' as 'system' for OpenAI
+      case 'user':
+        console.log('Formatting message as user role:', message.text); // gpt_pilot_debugging_log
+        return { role: 'user', content: message.text.trim() };
+      default:
+        console.error('Encountered unknown role type:', message.role); // gpt_pilot_debugging_log
+        throw new Error(`Unknown role type: ${message.role}`);
+    }
+  });
 };
 
 const callOpenAiApi = async (messages, io, requestId) => {
   if (!OPENAI_API_KEY) {
+    console.error('OpenAI API key is not set.');
     throw new Error('OpenAI API key is not set.');
   }
 
   const OPENAI_COMPLETIONS_ENDPOINT = `${OPENAI_API_BASE_URL}/chat/completions`;
 
-  // Using the new utility function to format messages
+  // Using the updated utility function to format messages
   const messagesPayload = formatMessagesForOpenAi(messages);
 
   let attempt = 0;
@@ -47,12 +62,11 @@ const callOpenAiApi = async (messages, io, requestId) => {
       );
 
       const responseData = response.data;
-      console.log(`Success with request ID: ${requestId}, response:`, responseData); // Debug log for response data
+      console.log(`Success with request ID: ${requestId}, response:`, responseData); // Debug log for response data. gpt_pilot_debugging_log
       io.emit('openai_real_response', { response: responseData, requestId: requestId });
       return;
     } catch (error) {
-      // Debug log for error
-      console.error(`Error with request ID: ${requestId}, error message:`, error.message, 'error response:', error.response?.data);
+      console.error(`Error with request ID: ${requestId}, error message:`, error.message, 'error response:', error.response?.data, error.stack); // Logging the full error details. gpt_pilot_debugging_log
       if (error.response?.status === 429 && attempt < MAX_RETRIES) {
         // Rate limit error, wait before retrying
         await new Promise(resolve => setTimeout(resolve, backoffDelay));

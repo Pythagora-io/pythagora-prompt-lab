@@ -12,7 +12,7 @@ const conversationSchema = new Schema({
       text: String,
       role: {
         type: String,
-        enum: ['user', 'assistant'],
+        enum: ['user', 'assistant', 'system'],
         required: true
       }
     }
@@ -29,5 +29,7 @@ const conversationSchema = new Schema({
 }, { timestamps: true });
 
 const Conversation = mongoose.model('Conversation', conversationSchema);
+
+console.log("Conversation model loaded successfully."); // gpt_pilot_debugging_log
 
 module.exports = Conversation;

@@ -9,29 +9,32 @@ function removeMessageItem(element) {
   }
 }
 
-// Updated to handle DELETE request with the correct conversationId and responseId
-function deleteResponse(event, conversationId, responseId) {
+// Function to delete a response element
+// Modified deleteResponse function to include requestId in the API endpoint
+function deleteResponse(event, requestId, responseId) {
   event.preventDefault();
-  console.log(`Initiating DELETE request to URL: /api/delete-response/${conversationId}/${responseId}.`, { conversationId, responseId }); // gpt_pilot_debugging_log
-
-  fetch(`/api/delete-response/${conversationId}/${responseId}`, {
+  // Updated endpoint to include both requestId and responseId
+  console.log(`Initiating DELETE request to URL: /api/delete-response/${requestId}/${responseId}`); // gpt_pilot_debugging_log
+  fetch(`/api/delete-response/${requestId}/${responseId}`, {
     method: 'DELETE'
   })
   .then(response => {
-    console.log(`Deletion API response status for Conversation ID: ${conversationId}, Response ID: ${responseId}: ${response.status}`); // gpt_pilot_debugging_log
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
-    const responseElement = document.getElementById(`response-${responseId}`);
+    // Receive confirmation from server that deletion was successful
+    const responseElement = document.getElementById(`response-${requestId}`);
     if (responseElement) {
+      // Remove the specified response element from the DOM
       responseElement.remove();
-      console.log(`Response #${responseId} deleted successfully from the DOM.`); // gpt_pilot_debugging_log
+      console.log(`Response #${requestId} deleted successfully`);
     } else {
-      console.error(`Could not find response element #${responseId} in the DOM to remove.`); // gpt_pilot_debugging_log
+      // Log error if the response element could not be located
+      console.error(`Could not find response element #${requestId} in the DOM.`);
     }
   })
   .catch(error => {
-    console.error('Failed to delete response:', error.message, error.stack, { conversationId, responseId }); // gpt_pilot_debugging_log
+    console.error('Failed to delete response:', error.message, error.stack);
     alert(`Failed to delete response: ${error.message}`);
   });
 }
@@ -45,24 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.error('Submit button not found');
   }
 
-  // Refactor for event delegation for delete response
-  const responseContainer = document.getElementById('responseContainer');
-
-  if (responseContainer) {
-      responseContainer.addEventListener('click', function(event) {
-          if (event.target.matches('.delete-btn')) {
-              const button = event.target;
-              const requestId = button.getAttribute('data-request-id');
-              const responseId = button.getAttribute('data-response-id');
-              deleteResponse(event, requestId, responseId);
-          }
-      });
-  } else {
-      console.error('Response container not found for event delegation.');
-  }  
-
-  // Other functionalities remain unchanged
-
+  // Function to add a new message item to the list
   function addMessageItem(text = '', role = 'user') {
     const messageListElement = document.getElementById('messageList');
     const newMessageItem = document.createElement('div');
@@ -80,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Added new message item to list');
   }
 
+  // Event listener for the Add Message button
   const addMessageButton = document.getElementById('addMessageButton');
   if (addMessageButton) {
     addMessageButton.addEventListener('click', () => {
@@ -149,9 +136,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteButton = document.createElement('button');
     deleteButton.classList.add('ml-2', 'bg-red-500', 'hover:bg-red-700', 'text-white', 'font-bold', 'py-2', 'px-4', 'rounded');
     deleteButton.textContent = 'Delete';
-    console.log(`Attempting to attach delete event listener. Request ID: ${requestId}, Response ID: ${response.id}`); // gpt_pilot_debugging_log
-    deleteButton.setAttribute('data-request-id', requestId);
-    deleteButton.setAttribute('data-response-id', response.id);
+    // Log added to track delete button event attachment
+    console.log(`Attempting to delete. Request ID: ${requestId}, Response ID: ${response.id}`); // gpt_pilot_debugging_log
+    deleteButton.addEventListener('click', (event) => deleteResponse(event, requestId, response.id)); // Make sure to adjust according to the actual data structure which should contain id or a suitable identifier for response.
 
     responseElement.innerHTML = `
       <summary>Response #${requestId}</summary>
@@ -341,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Function to load and display a specific conversation's details
   function loadConversationDetails(conversationId) {
-    console.log(`Loading conversation details for ID: ${conversationId}`); 
+    console.log(`Loading conversation details for ID: ${conversationId}`); // gpt_pilot_debugging_log
     fetch(`/api/load-conversations/${conversationId}`, {
       method: 'GET',
       headers: {
@@ -356,30 +343,45 @@ document.addEventListener('DOMContentLoaded', () => {
       return response.json();
     })
     .then(conversation => {
+      // Clear existing messages and responses from the UI
       document.getElementById('messageList').innerHTML = '';
       document.getElementById('responseContainer').innerHTML = '';
-
+  
+      // Recreate message list items based on the loaded conversation
       conversation.messages.forEach((message) => {
         addMessageItem(message.text, message.role);
       });
-
+  
+      // Check if the responses object exists before trying to iterate over it
       if (conversation.responses && Array.isArray(conversation.responses)) {
+        // Recreate OpenAI API responses in the UI
         conversation.responses.forEach((response, index) => {
-          displayRealTimeResponse({
-            response: response,
-            requestId: index + 1
-          }); // gpt_pilot_debugging_log
+          const responseElement = document.createElement('details');
+          responseElement.innerHTML = `
+            <summary>Response #${index + 1}</summary>
+            <p>${response.text}</p>
+          `;
+          document.getElementById('responseContainer').appendChild(responseElement);
         });
       } else {
-        console.log('No responses found for this conversation.'); // gpt_pilot_debugging_log
+        console.error('No responses found for this conversation.');
       }
-
-      console.log('Conversation details loaded and displayed.'); // gpt_pilot_debugging_log
-    }).catch(error => {
-      console.error('Failed to load conversation details:', error.message, error.stack); // gpt_pilot_debugging_log
+  
+      console.log('Conversation details loaded and displayed.');
+    })
+    .catch(error => {
+      console.error('Failed to load conversation details:', error.message, error.stack);
       alert(`Failed to load conversation details: ${error.message}`);
     });
+  }
 
+  // Optional helper function to create the conversations list container if it doesn't exist
+  function createConversationsListContainer() {
+    const appElement = document.getElementById('app');
+    const newListContainer = document.createElement('div');
+    newListContainer.id = 'conversationsListContainer';
+    appElement.insertBefore(newListContainer, appElement.firstChild); // insert before the first child
+    return newListContainer;
   }
 
   let socket = null;
